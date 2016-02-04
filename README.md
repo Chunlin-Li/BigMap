@@ -11,3 +11,25 @@ set get 方法最好根据 Key / Value 类型由高阶函数生成
  
 trimToString 的方式可能性能并不如直接 toString 后用正则处理.
 
+
+
+For BigMap:
+keyLen
+valLen
+eleLen
+keyType
+valType
+async
+loadFactor
+set
+get
+
+For MapBlock:
+limit
+size
+status
+_newMap
+_threshold
+_buf
+step
+extFragment

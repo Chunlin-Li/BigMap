@@ -11,7 +11,9 @@ let defaultOpt = {
     keyType: 'string',
     valueType: 'number',
     loadFactor: 0.75,
-    extFragment: 1000
+    step: 0,
+    extFragment: 1000,
+    async: true
 };
 let idCount = 0;
 let primes = [131071, 8191, 127, 31, 7, 3, 1];
@@ -24,13 +26,25 @@ let primes = [131071, 8191, 127, 31, 7, 3, 1];
  * @constructor
  */
 function BigMap(keyLen, valLen, limit, options) {
-    this.opts = Object.assign(options || {}, defaultOpt);
+    var that = null;
+    that = new MapBlock(keyLen, valLen, limit, options, that);
+    return {
+        set: that.set,
+        get: that.get
+    }
+}
+
+
+function MapBlock(keyLen, valLen, limit, options, container) {
+
+    this.opts = Object.assign({}, defaultOpt, options);
     this.id = 'BigMap_' + idCount ++;
     this.keyLen = keyLen;
     this.valLen = valLen;
     this.limit = limit;
     this.eleLen = keyLen + valLen;
     this._buf = new Buffer(this.eleLen * limit);
+    this.container = container;
 
     this._threshold = this.opts.loadFactor * this.limit;    // size exceed threshold will toggle extend
     this.size = 0;  // the number of saved elements
@@ -49,13 +63,6 @@ function BigMap(keyLen, valLen, limit, options) {
     this.get = _getfun.call(this, this.opts.keyType, this.opts.valueType);
 }
 
-/**
- * save key value pair to BigMap
- * @param key
- * @param value
- * @returns {boolean}
- */
-BigMap.prototype.set = undefined;
 let _setfun = function (keyType, valueType) {
     let _valchecked;
     let _valwriter;
@@ -112,10 +119,6 @@ let _setfun = function (keyType, valueType) {
 };
 
 
-/**
- * get value from BigMap
- */
-//BigMap.prototype.get = undefined;
 let _getfun = function (keyType, valueType) {
     let _valreader;
 
@@ -156,14 +159,14 @@ let _getfun = function (keyType, valueType) {
 
 
 
-BigMap.prototype.extend = function () {
+MapBlock.prototype.extend = function () {
     // extended map has twice capacity then old one.
-    this._newMap = new BigMap(this.keyLen, this.valLen, this.limit * 2, this.opts);
+    this._newMap = new MapBlock(this.keyLen, this.valLen, this.limit * 2, this.opts);
 
     // enter extending status.
     this.status = 1;
 
-    if (this.opts.extFragment) {  // async
+    if (this.opts.async) {  // async
         // rehash
         let rehash = function (cur) {
             if (cur > this.limit) return;
@@ -175,13 +178,7 @@ BigMap.prototype.extend = function () {
                 next = function() { // finish the extending
                     console.log('migrate:', this.id, this.size+'/'+this.limit, ' ==> ',
                         this._newMap.id, this._newMap.size+'/'+this._newMap.limit);
-                    this.id = this._newMap.id;
-                    this.status = this._newMap.status;
-                    this._threshold = this._newMap._threshold;
-                    this.size = this._newMap.size;
-                    this.limit = this._newMap.limit;
-                    this._buf = this._newMap._buf;
-                    this._newMap = this._newMap._newMap;
+                    _copyProp(this);
                 }.bind(this);
             }
 
@@ -193,14 +190,10 @@ BigMap.prototype.extend = function () {
             }
 
             setTimeout(next, 0);
-            //setImmediate(next);
-            //process.nextTick(next);
 
         }.bind(this);
 
         setTimeout(function(){rehash(0)}, 0); // start from index 0
-        //setImmediate(function(){rehash(0)}); // start from index 0
-        //process.nextTick(function(){rehash(0)}); // start from index 0
 
     } else {  // sync
         let buk;
@@ -210,15 +203,20 @@ BigMap.prototype.extend = function () {
                 this._newMap.set(this._buf.readString(buk, this.keyLen), this._buf.slice(buk + this.keyLen, buk + this.eleLen));
             }
         }
-        this.status = 0;
-        this._buf = this._newMap._buf;
-        this.limit = this._newMap.limit;
-        this._threshold = this._newMap._threshold;
-        this._newMap = null;
+        _copyProp(this);
     }
-
-
 };
+
+let _copyProp = function (bm) {
+    bm.id = bm._newMap.id;
+    bm.status = bm._newMap.status;
+    bm._threshold = bm._newMap._threshold;
+    bm.size = bm._newMap.size;
+    bm.limit = bm._newMap.limit;
+    bm._buf = bm._newMap._buf;
+    bm._newMap = bm._newMap._newMap;
+};
+
 
 /**
  * read out a string from this buffer. cut by \u0000, \n or \r
@@ -234,4 +232,4 @@ Buffer.prototype.readString.reg = new RegExp('[^\u0000\n\r]*');
 
 function murmurhash3_32_gc(key,seed){let remainder,bytes,h1,h1b,c1,c1b,c2,c2b,k1,i;remainder=key.length&3;bytes=key.length-remainder;h1=seed;c1=0xcc9e2d51;c2=0x1b873593;i=0;while(i<bytes){k1=((key.charCodeAt(i)&0xff))|((key.charCodeAt(++i)&0xff)<<8)|((key.charCodeAt(++i)&0xff)<<16)|((key.charCodeAt(++i)&0xff)<<24);++i;k1=((((k1&0xffff)*c1)+((((k1>>>16)*c1)&0xffff)<<16)))&0xffffffff;k1=(k1<<15)|(k1>>>17);k1=((((k1&0xffff)*c2)+((((k1>>>16)*c2)&0xffff)<<16)))&0xffffffff;h1^=k1;h1=(h1<<13)|(h1>>>19);h1b=((((h1&0xffff)*5)+((((h1>>>16)*5)&0xffff)<<16)))&0xffffffff;h1=(((h1b&0xffff)+0x6b64)+((((h1b>>>16)+0xe654)&0xffff)<<16))}k1=0;switch(remainder){case 3:k1^=(key.charCodeAt(i+2)&0xff)<<16;case 2:k1^=(key.charCodeAt(i+1)&0xff)<<8;case 1:k1^=(key.charCodeAt(i)&0xff);k1=(((k1&0xffff)*c1)+((((k1>>>16)*c1)&0xffff)<<16))&0xffffffff;k1=(k1<<15)|(k1>>>17);k1=(((k1&0xffff)*c2)+((((k1>>>16)*c2)&0xffff)<<16))&0xffffffff;h1^=k1}h1^=key.length;h1^=h1>>>16;h1=(((h1&0xffff)*0x85ebca6b)+((((h1>>>16)*0x85ebca6b)&0xffff)<<16))&0xffffffff;h1^=h1>>>13;h1=((((h1&0xffff)*0xc2b2ae35)+((((h1>>>16)*0xc2b2ae35)&0xffff)<<16)))&0xffffffff;h1^=h1>>>16;return h1>>>0}
 
-module.exports = BigMap;
+module.exports = MapBlock;
