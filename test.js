@@ -1,7 +1,8 @@
+'use strict';
 var BigMap = require('./index');
 
 
-var map = new BigMap(5, 5, 10);
+var map = new BigMap(5, 8, 10);
 
 // async, send one by one
 //test1();
@@ -9,7 +10,6 @@ var map = new BigMap(5, 5, 10);
 //test2();
 // send all, in one event loop
 test3();
-
 
 
 // async, send one by one
@@ -36,11 +36,10 @@ function test2() {
 
 // send all, in one event loop
 function test3() {
-    var foo = function(i) {
+    for (let i = 0; i < 100; i ++) {
         setTimeout(function () {
-            map.set('key' + i, 'val' + i);
-            map.get('key' +i);
+            map.set('key' + i, i);
+            console.log('key' + i, map.get('key' +i));
         }, Math.random() * 10);
-    };
-    for (var i = 0; i < 100; i ++ ) foo(i);
+    }
 }

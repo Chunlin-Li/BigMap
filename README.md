@@ -1,9 +1,13 @@
 # BigMap
 
 
+
+
 value 如果是Number类型, 可以使用 buffer.writeDoubleBE(num) 等方式写入.
 
-Buffer 加了一个 trimToString() 方法.
+冲突后的 step 应该根据 limit 自适应选择.
 
-执行后似乎有无法释放的资源导致不能自动 exit 进程.
+set get 方法最好根据 Key / Value 类型由高阶函数生成
+ 
+trimToString 的方式可能性能并不如直接 toString 后用正则处理.
 
