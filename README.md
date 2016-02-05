@@ -15,7 +15,9 @@ trimToString 的方式可能性能并不如直接 toString 后用正则处理.
 
 可以选择是否 upgrade, upgrade 同步/异步
 
+添加 query miss 的测试用例
 
+完善 README
 
 
 For BigMap:

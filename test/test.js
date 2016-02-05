@@ -6,38 +6,37 @@ var BigMap = require('../index');
 var start = process.hrtime();
 async.series([
     cb => {
-        let bm = new BigMap(36, 8);
-        console.log('step', bm.currMapBlock.status.step);
-        cb(null, chalk.green('construct [PASS]'));
+        let bm = new BigMap(36, 8, {loadFactor: 0.5, upgrade: true, async_upgrade: false});
+        console.log('construct with options [PASS]');
+        cb();
     },
 
     cb => {
-        let bm = new BigMap(36, 8, {loadFactor: 0.5, async: false});
-        console.log(bm.currMapBlock.opt.loadFactor, 0.5, 'loadFactor');
-        console.log(bm.currMapBlock.opt.async, false, 'async flag');
-        cb(null, chalk.green('construct with options [PASS]'));
-    },
-
-    cb => {
-        var bm = new BigMap(12, 12, {valueType: 'string'});
+        var bm = new BigMap(12, 12);
         async.times(5000, (i, next) => {
             setTimeout(() => {
-                console.log(bm.set('key' + i, 'val' + i), 'set');
-                console.log(bm.get('key' +i), 'val' + i, 'get');
+                assert.ok(bm.set('key' + i, 'val' + i));
+                assert.ok((bm.get('key' +i) === 'val' + i));
                 next();
             }, Math.random() * 500);
-        }, err => err ? cb(err) : cb(null, chalk.green('set/get string without extend [PASS]')));
+        }, err => {
+            err ? cb(err) : cb();
+            console.log('set/get string without extend [PASS]');
+        });
     },
 
     cb => {
         var bm = new BigMap(12, 12, {valueType: 'number'});
         async.times(5000, (i, next) => {
             setTimeout(() => {
-                assert.ok(bm.set('key' + i, i), 'set');
-                assert.strictEqual(bm.get('key' +i), i, 'get');
+                assert.ok(bm.set('key' + i, i));
+                assert.ok(bm.get('key' +i) === i);
                 next();
             }, Math.random() * 500);
-        }, err => err ? cb(err) : cb(null, chalk.green('set/get number without extend [PASS]')));
+        }, err => {
+            err ? cb(err) : cb();
+            console.log('set/get number without extend [PASS]');
+        });
     },
     // TODO: test case for query miss
 
@@ -46,8 +45,8 @@ async.series([
 
         async.times(1000, (i, next) => {
             setTimeout(() => {
-                assert.ok(bm.set('key' + i, 'val' + i), 'set');
-                assert.strictEqual(bm.get('key' +i), 'val' + i, 'get');
+                assert.ok(bm.set('key' + i, 'val' + i));
+                assert.ok(bm.get('key' +i) === 'val' + i);
                 next();
             }, Math.random() * 500);
         }, err => {
@@ -56,16 +55,13 @@ async.series([
                 return;
             }
             setTimeout(() => {
-                //assert.strictEqual(bm._newMap, null, 'extend finished');
-                //assert.strictEqual(bm.status, 0, 'normal status');
                 for (let i = 0; i < 1000; i ++) {
-                    assert.strictEqual(bm.get('key' +i), 'val' + i, 'get again');
+                    assert.ok(bm.get('key' +i) === 'val' + i);
                 }
-                console.log('map : ', `id ${bm.id} newMap ${bm._buf.length}, status ${bm.status} size ${bm.size}`);
-                console.log('Time Used: ' + process.hrtime(start));
-                cb(null, chalk.green('set/get number with extend [PASS]'));
+                cb();
+                console.log('set/get number with extend [PASS]');
             }, 1000);
         });
 
     }
-], (err, result) => err ? console.error(err.stack, err) : result.filter(item => console.log(item)));
+], (err, result) => err ? console.error(err.stack, err) : void(0));

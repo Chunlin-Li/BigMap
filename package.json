@@ -24,7 +24,6 @@
   },
   "homepage": "https://github.com/Chunlin-Li/BigMap#readme",
   "devDependencies": {
-    "async": "^1.5.2",
-    "chalk": "^1.1.1"
+    "async": "^1.5.2"
   }
 }

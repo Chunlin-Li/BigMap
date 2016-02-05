@@ -11,14 +11,15 @@ let defaultOpt = {
     keyLen: undefined,
     keyType: 'string',
     valLen: undefined,
-    valueType: 'number',
+    valueType: 'string',
     loadFactor: 0.75,
     eleLen: undefined,
-    upgrade: true,
+    upgrade: false,
     async_upgrade: false
 };
 let idCountMB = 0;
 let idCount = 0;
+let maxChip = 1000;
 // Buffer Size : 1MB 16MB 128MB 512MB 1G 2G 4G 8G 16G
 // capacity = Buffer Size / Element Length
 let capacities = [1048577, 16777217, 134217729, 536870913, 1073741825, 2147483651, 4294967301, 8589934600, 17179869200];
@@ -194,7 +195,7 @@ MapBlock.prototype.upgrade = function (key, value) {
         // rehash
         let rehash = function (cur) {
             if (cur > this.status.capacity) return;
-            let buk, stop = cur + Math.floor(Math.sqrt(this.status.capacity));
+            let buk, stop = cur + ( Math.floor(Math.sqrt(this.status.capacity)) > maxChip ? maxChip : Math.floor(Math.sqrt(this.status.capacity)));
             let next = () => rehash(stop);
 
             if (this.status.capacity <= stop) { // the last pass
