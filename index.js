@@ -3,9 +3,6 @@
  * keyType : Data type of key. only support string.
  * valueType : Data type of value. e.g. 'string', 'number' ...
  * loadFactor: extend threshold = loadFactor * capacity
- * step: if conflict occurs, move forward this steps
- * extFragment: if 0, extend will execute synchronously, or else, the whole
- *              work will split to fragments.
  */
 let defaultOpt = {
     keyLen: undefined,
@@ -88,12 +85,8 @@ function MapBlock(capacityLvl, root) {
 let initBuffer = function () {
     this.buf = new Buffer(this.opt.eleLen * this.status.capacity).fill(0);
     if (this.opt.keyType === 'number') {
-        for(let i = 0 ; i < this.status.capacity; i ++) {
-            this.buf.fill(NaN, i*this.opt.eleLen)
-        }
     }
     if (this.opt.valueType === 'number') {
-
     }
 };
 
@@ -104,6 +97,7 @@ let bindFunction = function() {
     let valWrite;
     let keyCheck;
     let keyCompare;
+    let keyEmpty;
     let keyRead;
     let keyWrite;
 
@@ -127,6 +121,7 @@ let bindFunction = function() {
         case 'string':
             keyCheck = (map, key) => key.length <= map.opt.keyLen;
             keyCompare = (map, hc, key) => map.buf.readString(hc * map.opt.eleLen, map.opt.keyLen) === key;
+            keyEmpty = (map, hc) => map.buf[hc * map.opt.eleLen] === 0;
             keyRead = (map, hc) => map.buf.readString(hc * map.opt.eleLen, map.opt.keyLen);
             keyWrite = (map, key, hc) => map.buf.write(key, hc*map.opt.eleLen);
             break;
@@ -140,7 +135,7 @@ let bindFunction = function() {
             throw new TypeError(this.opt.keyType, 'type not support as key!');
     }
 
-    this._action = {keyCheck, keyCompare, keyRead, keyWrite, valCheck, valRead, valWrite};
+    this._action = {keyCheck, keyCompare, keyEmpty, keyRead, keyWrite, valCheck, valRead, valWrite};
 
     this.set = (key, value) => this.currMapBlock.set(key, value) ? ++this.size > 0 : false;
     this.get = (key) => this.currMapBlock.get(key);
@@ -160,7 +155,7 @@ let setFun = function () {
 
         // handle conflict
         //while (this.buf[hc * this.opt.eleLen] !== 0) {
-        while (!act.keyCompare(this, hc, key)) {
+        while (!act.keyEmpty(this, hc)) {
             //console.log('set conflict: ', hc, key, this.id, this.status.capacity, this.status.size);
             hc = (hc  + this.status.step) % this.status.capacity;
         }
