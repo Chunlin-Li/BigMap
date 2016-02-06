@@ -33,9 +33,16 @@ let primes = [131071, 8191, 127, 31, 7, 3, 1];
  */
 function BigMap(keyLen, valLen, options) {
 
+
     this.opt = Object.assign({}, defaultOpt, options);
-    this.opt.keyLen = keyLen;
-    this.opt.valLen = valLen;
+    this.opt.keyType = this.opt.keyType.toLowerCase();
+    this.opt.valueType = this.opt.valueType.toLowerCase();
+
+    if (this.opt.keyType === 'number') this.opt.keyLen = 8;
+    else this.opt.keyLen = keyLen;
+    if (this.opt.valueType === 'number') this.opt.valLen = 8;
+    else this.opt.valLen = valLen;
+
     this.opt.eleLen = keyLen + valLen;
 
     this.id = 'BigMap_' + idCount ++;
@@ -43,9 +50,8 @@ function BigMap(keyLen, valLen, options) {
     this.size = 0;
     this.currMapBlock = null;
     this.MBList = [];
+    bindFunction.call(this);
     new MapBlock(0, this);
-    this.set = (key, value) => this.currMapBlock.set(key, value) ? ++this.size > 0 : false;
-    this.get = (key) => this.currMapBlock.get(key);
 }
 
 
@@ -62,7 +68,7 @@ function MapBlock(capacityLvl, root) {
         capacityLvl: capacityLvl
     };
     this.status.threshold = this.status.capacity * this.opt.loadFactor;
-    this.buf = new Buffer(this.opt.eleLen * this.status.capacity).fill(0);
+    initBuffer.call(this);
     this.root = root;
     root.currMapBlock = this;
     root.MBList.push(this);
@@ -79,84 +85,111 @@ function MapBlock(capacityLvl, root) {
     this.get = getFun.call(this);
 }
 
-let setFun = function () {
-    let valChecked;
-    let valWriter;
+let initBuffer = function () {
+    this.buf = new Buffer(this.opt.eleLen * this.status.capacity).fill(0);
+    if (this.opt.keyType === 'number') {
+        for(let i = 0 ; i < this.status.capacity; i ++) {
+            this.buf.fill(NaN, i*this.opt.eleLen)
+        }
+    }
+    if (this.opt.valueType === 'number') {
 
-    switch (this.opt.valueType.toLowerCase()) {
+    }
+};
+
+let bindFunction = function() {
+
+    let valCheck;
+    let valRead;
+    let valWrite;
+    let keyCheck;
+    let keyCompare;
+    let keyRead;
+    let keyWrite;
+
+
+    switch (this.opt.valueType) {
         case 'string':
-            valChecked = value => value.length <= this.opt.valLen;
-            valWriter = (value, hc) => this.buf.write(value, hc * this.opt.eleLen + this.opt.keyLen);
+            valCheck = (map, value) => value.length <= map.opt.valLen;
+            valRead = (map, hc) => map.buf.readString(hc * map.opt.eleLen + map.opt.keyLen, map.opt.valLen);
+            valWrite = (map, value, hc) => map.buf.write(value, hc * map.opt.eleLen + map.opt.keyLen);
             break;
         case 'number':
-            valChecked = value => typeof value === 'number' && Number.isSafeInteger(value);
-            valWriter = (value, hc) => this.buf.writeDoubleBE(value, hc * this.opt.eleLen + this.opt.keyLen);
+            valCheck = (map, value) => typeof value === 'number';
+            valRead = (map, hc) => map.buf.readDoubleBE(hc * map.opt.eleLen + map.opt.keyLen);
+            valWrite = (map, value, hc) => map.buf.writeDoubleBE(value, hc * map.opt.eleLen + map.opt.keyLen);
             break;
         default :
             throw new TypeError(this.opt.valueType, 'type not support as value!');
     }
 
+    switch (this.opt.keyType) {
+        case 'string':
+            keyCheck = (map, key) => key.length <= map.opt.keyLen;
+            keyCompare = (map, hc, key) => map.buf.readString(hc * map.opt.eleLen, map.opt.keyLen) === key;
+            keyRead = (map, hc) => map.buf.readString(hc * map.opt.eleLen, map.opt.keyLen);
+            keyWrite = (map, key, hc) => map.buf.write(key, hc*map.opt.eleLen);
+            break;
+        case 'number':
+            keyCheck = (map, key) => typeof key === 'number';
+            keyCompare = (map, hc, key) => Number.isNaN(key)? Number.isNaN(map.buf.readDoubleBE(hc * map.opt.eleLen)) : map.buf.readDoubleBE(hc * map.opt.eleLen) === key;
+            keyRead = (map, hc) => map.buf.readDoubleBE(hc * map.opt.eleLen);
+            keyWrite = (map, key, hc) => map.buf.writeDoubleBE(key, hc*map.opt.eleLen);
+            break;
+        default :
+            throw new TypeError(this.opt.keyType, 'type not support as key!');
+    }
 
+    this._action = {keyCheck, keyCompare, keyRead, keyWrite, valCheck, valRead, valWrite};
+
+    this.set = (key, value) => this.currMapBlock.set(key, value) ? ++this.size > 0 : false;
+    this.get = (key) => this.currMapBlock.get(key);
+};
+
+let setFun = function () {
+    let act = this.root._action;
     return function (key, value) {
-        // data will write to new Map if current map in extending status
-        //if (this.upgrading) {
-        //    return this.nextMB.set(key, value);
-        //}
 
         if (this.status.size >= this.status.threshold) this.upgrade(key, value);
 
         // either key or value should not exceed the length
         // TYPE CHECK
-        if (key.length > this.opt.keyLen || !valChecked(value)) throw new TypeError('key too long or not valid');
+        if (!act.keyCheck(this, key) || !act.valCheck(this, value)) throw new TypeError('key value check failed');
 
         let hc = murmurhash3_32_gc(key) % this.status.capacity;
 
         // handle conflict
-        while (this.buf[hc * this.opt.eleLen] !== 0) {
+        //while (this.buf[hc * this.opt.eleLen] !== 0) {
+        while (!act.keyCompare(this, hc, key)) {
             //console.log('set conflict: ', hc, key, this.id, this.status.capacity, this.status.size);
             hc = (hc  + this.status.step) % this.status.capacity;
         }
 
         // save key
-        this.buf.write(key, hc * this.opt.eleLen);
+        act.keyWrite(this, key, hc);
 
         // save value
         // if value is buffer, copy it directly. this used for extending.
         if (value instanceof Buffer)
             value.copy(this.buf, hc * this.opt.eleLen + this.opt.keyLen);
         else
-            valWriter(value, hc);
-            //this.buf.write(value, hc * this.opt.eleLen + this.opt.keyLen);
+            act.valWrite(this, value, hc);
         this.status.size ++;
-        //console.log('### saved ### : ', this.id, this.status.size+'/'+this.status.capacity, key, hc);
         return true;
     }.bind(this);
 };
 
 
 let getFun = function () {
-    let valReader;
-
-    switch (this.opt.valueType.toLowerCase()) {
-        case 'string':
-            valReader = hc => this.buf.readString(hc * this.opt.eleLen + this.opt.keyLen, this.opt.valLen);
-            break;
-        case 'number':
-            valReader = hc => this.buf.readDoubleBE(hc * this.opt.eleLen + this.opt.keyLen);
-            break;
-        default :
-            throw new TypeError(this.opt.valueType, 'type not support as value!');
-    }
-
-
-
+    let act = this.root._action;
     return function (key) {
         if (key.length > this.opt.keyLen) return undefined;
 
         let hc = murmurhash3_32_gc(key) % this.status.capacity;
 
         // handle conflict
-        while (this.buf.readString(hc * this.opt.eleLen, this.opt.keyLen) !== key) {
+        //while (this.buf.readString(hc * this.opt.eleLen, this.opt.keyLen) !== key) {
+        while (!act.keyCompare(this, hc, key)) {
             //console.log('get conflict');
             if (this.buf[hc * this.opt.eleLen] === 0) {
                 // during extending status, try newMap.
@@ -168,7 +201,7 @@ let getFun = function () {
             hc = (hc + this.status.step) % this.status.capacity;
         }
 
-        return valReader(hc);
+        return act.valRead(this, hc);
     }.bind(this);
 };
 
