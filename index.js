@@ -2,7 +2,7 @@
 /**
  * keyType : Data type of key. only support string.
  * valueType : Data type of value. e.g. 'string', 'number' ...
- * loadFactor: extend threshold = loadFactor * capacity
+ * loadFactor: migrate threshold = loadFactor * capacity
  */
 let defaultOpt = {
     keyLen: undefined,
@@ -11,8 +11,8 @@ let defaultOpt = {
     valueType: 'string',
     loadFactor: 0.75,
     eleLen: undefined,
-    upgrade: false,
-    async_upgrade: false
+    migrate: false,
+    async_migrate: false
 };
 let idCountMB = 0;
 let idCount = 0;
@@ -30,7 +30,6 @@ let primes = [131071, 8191, 127, 31, 7, 3, 1];
  */
 function BigMap(keyLen, valLen, options) {
 
-
     this.opt = Object.assign({}, defaultOpt, options);
     this.opt.keyType = this.opt.keyType.toLowerCase();
     this.opt.valueType = this.opt.valueType.toLowerCase();
@@ -40,10 +39,10 @@ function BigMap(keyLen, valLen, options) {
     if (this.opt.valueType === 'number') this.opt.valLen = 8;
     else this.opt.valLen = valLen;
 
-    this.opt.eleLen = keyLen + valLen;
+    this.opt.eleLen = this.opt.keyLen + this.opt.valLen;
 
     this.id = 'BigMap_' + idCount ++;
-    this.upgrading = 0;
+    this.migrating = 0; // 0 if no any map block in migrating status.
     this.size = 0;
     this.currMapBlock = null;
     this.MBList = [];
@@ -55,22 +54,24 @@ function BigMap(keyLen, valLen, options) {
 function MapBlock(capacityLvl, root) {
 
     this.id = 'MapBlock_' + idCountMB ++;
-    this.opt = root.opt;
+    this.opt = root.opt; // copy BigMap's options
     this.status = {
         capacity: Math.floor(capacities[capacityLvl] / this.opt.eleLen),
-        upgrading: false,
+        migrating: false,
         size: 0,    // the number of saved elements
-        threshold: 0,   // size exceed threshold will toggle extend
-        step: 1,
+        threshold: 0,   // size exceed threshold will toggle migrate
+        step: 1,  // for collision resolution
         capacityLvl: capacityLvl
     };
     this.status.threshold = this.status.capacity * this.opt.loadFactor;
+
     initBuffer.call(this);
     this.root = root;
     root.currMapBlock = this;
     root.MBList.push(this);
     this.nextMB = null;
     this.prevMB = null;
+
     // compute step value.
     for (let sq = Math.floor(Math.sqrt(this.status.capacity)), i = 0; i < primes.length; i ++) {
         if (primes[i] <= sq && this.status.capacity % primes[i] !== 0) {
@@ -78,29 +79,19 @@ function MapBlock(capacityLvl, root) {
             break;
         }
     }
+
+    // generate set and get function.
     this.set = setFun.call(this);
     this.get = getFun.call(this);
 }
 
 let initBuffer = function () {
     this.buf = new Buffer(this.opt.eleLen * this.status.capacity).fill(0);
-    if (this.opt.keyType === 'number') {
-    }
-    if (this.opt.valueType === 'number') {
-    }
 };
 
 let bindFunction = function() {
 
-    let valCheck;
-    let valRead;
-    let valWrite;
-    let keyCheck;
-    let keyCompare;
-    let keyEmpty;
-    let keyRead;
-    let keyWrite;
-
+    let valCheck, valRead, valWrite, keyCheck, keyCompare, keyEmpty, keyRead, keyWrite;
 
     switch (this.opt.valueType) {
         case 'string':
@@ -137,40 +128,62 @@ let bindFunction = function() {
 
     this._action = {keyCheck, keyCompare, keyEmpty, keyRead, keyWrite, valCheck, valRead, valWrite};
 
-    this.set = (key, value) => this.currMapBlock.set(key, value) ? ++this.size > 0 : false;
+    this.set = (key, value) => {
+        switch (this.currMapBlock.set(key, value)) {
+            case 1 :
+                ++this.size; // fall-through to next case
+            case 0 :
+                return true;
+            case -1 :
+                return false;
+        }
+    };
+
     this.get = (key) => this.currMapBlock.get(key);
 };
 
 let setFun = function () {
     let act = this.root._action;
     return function (key, value) {
+        let code = -1;
+        if (this.status.size >= this.status.threshold) this.migrate(key, value);
 
-        if (this.status.size >= this.status.threshold) this.upgrade(key, value);
-
-        // either key or value should not exceed the length
         // TYPE CHECK
-        if (!act.keyCheck(this, key) || !act.valCheck(this, value)) throw new TypeError('key value check failed');
+        if (!(act.keyCheck(this, key) && act.valCheck(this, value))) throw new TypeError('key value check failed when set');
 
         let hc = murmurhash3_32_gc(key) % this.status.capacity;
 
-        // handle conflict
-        //while (this.buf[hc * this.opt.eleLen] !== 0) {
-        while (!act.keyEmpty(this, hc)) {
-            //console.log('set conflict: ', hc, key, this.id, this.status.capacity, this.status.size);
-            hc = (hc  + this.status.step) % this.status.capacity;
+        // resolve collision
+        for (let i = 0; i < this.status.capacity; i++) {
+            if (act.keyEmpty(this, hc)) {
+                if (this.prevMB && this.prevMB.get(key) !== undefined) {
+                    code = 0
+                } else {
+                    code = 1;
+                }
+                this.status.size ++;
+                break;
+            } else if (act.keyCompare(this, hc, key)) {
+                code = 0;
+                break;
+            } else {
+                hc = (hc + this.status.step) % this.status.capacity;
+            }
         }
 
         // save key
         act.keyWrite(this, key, hc);
 
         // save value
-        // if value is buffer, copy it directly. this used for extending.
-        if (value instanceof Buffer)
+        if (value instanceof Buffer) { // if value is buffer, copy it directly. this used for internal.
+            code = 0;
             value.copy(this.buf, hc * this.opt.eleLen + this.opt.keyLen);
-        else
+        } else {
             act.valWrite(this, value, hc);
-        this.status.size ++;
-        return true;
+        }
+
+        // code :   set failed :  -1;   insert a new key: 1;  rewrite an exist key/migrate: 0;
+        return code;
     }.bind(this);
 };
 
@@ -182,12 +195,11 @@ let getFun = function () {
 
         let hc = murmurhash3_32_gc(key) % this.status.capacity;
 
-        // handle conflict
-        //while (this.buf.readString(hc * this.opt.eleLen, this.opt.keyLen) !== key) {
+        // resolve collision
         while (!act.keyCompare(this, hc, key)) {
-            //console.log('get conflict');
+            //console.log('get collision');
             if (this.buf[hc * this.opt.eleLen] === 0) {
-                // during extending status, try newMap.
+                // during migrating status, try newMap.
                 if (this.prevMB) {
                     return this.prevMB.get(key);
                 }
@@ -202,9 +214,8 @@ let getFun = function () {
 
 
 
-MapBlock.prototype.upgrade = function (key, value) {
-    // extended map has twice capacity then old one.
-    let nextCapLvl = 1;
+MapBlock.prototype.migrate = function (key, value) {
+    let nextCapLvl = 1; // the new MapBlock capacity level
     if (this.prevMB) {
         nextCapLvl = this.status.capacityLvl + 1 < capacities.length ?
         this.status.capacityLvl + 1 : this.status.capacityLvl;
@@ -213,25 +224,23 @@ MapBlock.prototype.upgrade = function (key, value) {
     this.nextMB = new MapBlock(nextCapLvl, this.root);
     this.nextMB.prevMB = this;
 
-    // enter upgrading status.
-    if (!this.opt.upgrade) return;
+    if (!this.opt.migrate) return;  // migrate disabled.
 
-    this.status.upgrading = true;
-    this.root.upgrading ++;
+    // set migrating status.
+    this.status.migrating = true;
+    this.root.migrating ++;
 
-    if (this.opt.async_upgrade) {  // async
+    if (this.opt.async_migrate) {  // async migrate
         // rehash
         let rehash = function (cur) {
             if (cur > this.status.capacity) return;
+            // split to chips
             let buk, stop = cur + ( Math.floor(Math.sqrt(this.status.capacity)) > maxChip ? maxChip : Math.floor(Math.sqrt(this.status.capacity)));
+
             let next = () => rehash(stop);
-
-            if (this.status.capacity <= stop) { // the last pass
+            if (this.status.capacity <= stop) { // the last pass, finish the migrating
                 stop = this.status.capacity;
-                next = () => { // finish the extending
-
-                    destory(this);
-                };
+                next = () => destroy(this);
             }
 
             for (let i = cur; i < stop; i++) {
@@ -240,14 +249,11 @@ MapBlock.prototype.upgrade = function (key, value) {
                     this.nextMB.set(this.buf.readString(buk, this.opt.keyLen), this.buf.slice(buk + this.opt.keyLen, buk + this.opt.eleLen));
                 }
             }
-
             setImmediate(next);
-
         }.bind(this);
 
         setImmediate(() => rehash(0)); // start from index 0
-
-    } else {  // sync
+    } else {  // sync migrate
         let buk, targetMB = this.root.currMapBlock;
         for (let i = 0; i < this.status.capacity; i++) {
             buk = i * this.opt.eleLen;
@@ -255,22 +261,19 @@ MapBlock.prototype.upgrade = function (key, value) {
                 targetMB.set(this.buf.readString(buk, this.opt.keyLen), this.buf.slice(buk + this.opt.keyLen, buk + this.opt.eleLen));
             }
         }
-        targetMB.set(key, value);
-        destory(this);
+        targetMB.set(key, value);  // keep the current key value from destroy
+        destroy(this);
     }
 };
 
-let destory = function (bm) {
+let destroy = function (bm) {
 
-    //let ptr = bm.prevMB;
     if (bm.prevMB)
         bm.prevMB.nextMB = bm.nextMB;
     bm.nextMB.prevMB = bm.prevMB;
     bm.root.MBList.find((ele, index, arr) => ele === bm ? [].splice.call(arr, index, 1) : null);
-    bm.root.upgrading --;
-    //bm.buf = null;
-
-    console.log('destroy MapBlock:', bm.id, bm.status.size + '/' + bm.status.capacity);
+    bm.root.migrating --;
+    //console.log('destroy MapBlock:', bm.id, bm.status.size + '/' + bm.status.capacity);
 };
 
 

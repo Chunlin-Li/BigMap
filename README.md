@@ -54,15 +54,14 @@ bigmap.get('hello')
 
 construct a new BigMap
 
-
 * `key_length` : required. specify the max key string length. recommend a multiple of 4.
 * `value_length` : required. specify the max value string length. recommend a multiple of 4.
 * `options` : optional.
     * `keyType` : only support string now.
-    * `valueType` : support string and number. default is string.
+    * `valueType` : support string and number. default is string. note: if value type set to number, the value_length will be override by 8 (DoubleFloat).
     * `loadFactor` : default is 0.75
-    * `upgrade` : whether rehash data from old buffer to new bigger buffer. default is false
-    * `async_upgrade` : if upgrade, use async mode or sync mode. default is false
+    * `migrate` : whether rehash data from old buffer to new bigger buffer. default is false
+    * `async_migrate` : if migrate, use async mode or sync mode. default is false
 
 
 ### set(key, value)
@@ -85,5 +84,15 @@ get a value by the key.
 
 `return` string or number, depends on the options. if not find the key, return undefined.
 
+### properties
 
-### TODO List
+* `.id` : {string} BigMap id
+* `.size` : {number} the number of the elements have been set.
+* `.migrating` : {number} 0 if not in migrating status, or else, it has N MapBlocks in migrating status.
+
+### TODO
+
+* add more test case, make sure basic functionality
+* key support number type
+* add remove function
+* change data structure, add a meta byte

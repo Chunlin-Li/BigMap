@@ -1,22 +1,25 @@
 {
   "name": "big-map",
-  "version": "0.0.1",
-  "description": "A big map, use Buffer, will not restrict by heap memory limit",
+  "version": "0.1.0",
+  "description": "A big map, use buffer, help you exceed V8 heap memory limit",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Chunlin-Li/BigMap.git"
+    "test": "node_modules/mocha/bin/mocha test/index.js"
   },
   "keywords": [
     "js",
-    "javascript",
+    "node",
     "hash",
     "map",
     "buffer"
   ],
+  "files": [
+    "index.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Chunlin-Li/BigMap.git"
+  },
   "author": "Chunlin Li <zhglclyx@gmail.com>",
   "license": "MIT",
   "bugs": {
@@ -24,6 +27,7 @@
   },
   "homepage": "https://github.com/Chunlin-Li/BigMap#readme",
   "devDependencies": {
-    "async": "^1.5.2"
+    "async": "^1.5.2",
+    "mocha": "^2.4.5"
   }
 }
