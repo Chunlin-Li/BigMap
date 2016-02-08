@@ -28,6 +28,12 @@ you can store 4GB, 8GB or more data therein, as long as sufficient physical memo
 
 ------------------------
 
+### node compatibility
+
+it needs node version >= 4.0 to support some es6 features. (arrow function, let ... )
+
+------------------------
+
 ### Usage
 
 ##### install :
