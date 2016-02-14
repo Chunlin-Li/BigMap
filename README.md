@@ -53,6 +53,42 @@ bigmap.get('hello')
 // -> 'world'
 ```
 
+##### Heap Memory Usage
+
+
+```javascript
+var BigMap = require('big-map');
+var bigmap = new BigMap(32, 32);
+var v8 = require('v8');
+
+console.log('before: ', v8.getHeapStatistics().used_heap_size);
+
+for (var i = 0; i < 1024 * 128; i ++ ) {
+    bigmap.set('it\'s a long string key ' + i, 'it\'s a long string value' + i);
+}
+
+console.log('after: ', v8.getHeapStatistics().used_heap_size);
+```
+
+On my Mac, before is 10018984 and after is 10731160. the heap memory almost not change.
+
+
+```javascript
+var obj = {};
+var v8 = require('v8');
+
+console.log('before: ', v8.getHeapStatistics().used_heap_size);
+
+for (var i = 0; i < 1024 * 128; i ++ ) {
+    obj['it\'s a long string key ' + i] = 'it\'s a long string value' + i;
+}
+
+console.log('after: ', v8.getHeapStatistics().used_heap_size);
+```
+
+As contrast, after the codes above, heap memory increase from 9400024 to 33636280, it grows 23MB.
+it has 128K key/value pairs, 23MB / 128K = 184 Byte per key/value pair costs.
+
 ------------------------------
 
 
