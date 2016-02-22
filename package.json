@@ -1,6 +1,6 @@
 {
   "name": "big-map",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A big map, use buffer, help you exceed V8 heap memory limit",
   "main": "index.js",
   "scripts": {
