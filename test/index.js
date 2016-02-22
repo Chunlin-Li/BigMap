@@ -48,19 +48,19 @@ describe('With migrate', function () {
     this.timeout(1000);
     it('sync migrate', function () {
         var bm = new BigMap(512, 512, {migrate: true, async_migrate: false});
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 2000; i++) {
             assert.ok(bm.set('key' + i, 'val' + i));
             assert.ok(bm.get('key' +i) === 'val' + i);
         }
         assert.strictEqual(bm.MBList.length, 1);
         assert.strictEqual(bm.migrating, 0);
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 2000; i++) {
             assert.ok(bm.get('key' +i) === 'val' + i);
         }
     });
     it('async migrate', function (done) {
         var bm = new BigMap(512, 512, {migrate: true, async_migrate: true});
-        for (let i = 0; i < 1000; i++) {
+        for (let i = 0; i < 2000; i++) {
             assert.ok(bm.set('key' + i, 'val' + i));
             assert.strictEqual(bm.get('key' +i), 'val' + i);
         }
@@ -72,7 +72,7 @@ describe('With migrate', function () {
                     check();
                 } else {
                     assert.ok(bm.MBList.length === 1);
-                    for (let i = 0; i < 1000; i++) {
+                    for (let i = 0; i < 2000; i++) {
                         assert.ok(bm.get('key' + i) === 'val' + i);
                     }
                     done();

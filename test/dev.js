@@ -78,15 +78,20 @@ async.series([
         console.log('overwrite exist key [PASS], ', process.hrtime(start)[0]*1000 + process.hrtime(start)[1]/1000000, 'ms');
     },
 
-        cb => {
+    cb => {
         start = process.hrtime();
-        var bm = new BigMap(12, 12, {valueType: 'string', migrate: true, async_migrate: true});
-        async.times(5000, (i, acb) => {
+        var bm = new BigMap(128, 128, {
+            valueType: 'number',
+            keyType: 'string',
+            migrate: true,
+            async_migrate: false
+        });
+        async.times(200000, (i, acb) => {
             setTimeout(() => {
-                assert.ok(bm.set('key' + i, 'val' + i));
+                assert.ok(bm.set('thisisalongstringkey' + i, i));
                 acb();
-                assert.ok(bm.get('key' +i) === 'val' + i);
-            }, 0);
+                assert.ok(bm.get('thisisalongstringkey' + i) === i);
+            }, 50);
         }, err => {
             if (err) {
                 cb(err);
@@ -94,13 +99,12 @@ async.series([
             }
             setTimeout(() => {
                 assert.ok(bm.MBList.length === 1);
-                for (let i = 0; i < 5000; i ++) {
-                    assert.ok(bm.get('key' +i) === 'val' + i);
+                for (let i = 0; i < 200000; i++) {
+                    assert.ok(bm.get('thisisalongstringkey' + i) === i);
                 }
                 cb();
-                console.log('set/get number with extend [PASS], ', process.hrtime(start)[0]*1000 + process.hrtime(start)[1]/1000000, 'ms');
-            }, 0);
+            }, 5000);
+            console.log('set/get number with extend [PASS], ', process.hrtime(start)[0] * 1000 + process.hrtime(start)[1] / 1000000, 'ms');
         });
-
     }
 ], (err, result) => err ? console.error(err.stack, err) : void(0));
