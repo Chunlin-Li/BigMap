@@ -103,8 +103,8 @@ construct a new BigMap
     * `keyType` : only support string now.
     * `valueType` : support string and number. default is string. note: if value type set to number, the value_length will be override by 8 (DoubleFloat).
     * `loadFactor` : default is 0.75
-    * `migrate` : whether rehash data from old buffer to new bigger buffer. default is false
-    * `async_migrate` : if migrate, use async mode or sync mode. default is false
+    * `migrate` : whether rehash data from old buffer to new bigger buffer. default is false. (set it true will increase average performance but it's need time to migrate data)
+    * `async_migrate` : if migrate, use async mode or sync mode. default is false. (set it true will lead to performance drop)
 
 
 ### set(key, value)
