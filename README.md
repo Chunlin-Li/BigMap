@@ -2,6 +2,7 @@
 
 ----------------------
 
+[![Build status][travis-image]][travis-url]
 
 This package provides you with a big map.   
 It uses Buffer as its storage space rather than heap memory.  
@@ -138,3 +139,7 @@ get a value by the key.
 * key support number type
 * add remove function
 * change data structure, add a meta byte
+
+
+[travis-image]: https://img.shields.io/travis/Chunlin-Li/BigMap.svg?style=flat
+[travis-url]: https://travis-ci.org/Chunlin-Li/BigMap
